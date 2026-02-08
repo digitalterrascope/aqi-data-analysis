@@ -1,0 +1,4 @@
+aqi_analysis/
+__pycache__/
+**/__pycache__/
+.env
