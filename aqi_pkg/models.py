@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base
-from sqlalchemy import Column, Integer, String, Double, DateTime
+from sqlalchemy import Column, Integer, String, Double, DateTime, Boolean
 
 Base = declarative_base()
 
@@ -34,3 +34,21 @@ class Entry(Base):
     T_C = Column(Double)
     TVOC_PPM = Column(Double)
     Noise_DB = Column(Double)
+
+
+class IsDuplicate(Base):
+    __tablename__ = "IsDuplicate"
+
+    scrape_id = Column(Integer, primary_key=True)
+    is_duplicate = Column(Boolean)
+
+
+class MetricAverages(Base):
+    __tablename__ = "MetricAverages"
+
+    scrape_id = Column(Integer, primary_key=True)
+    metric_name = Column(String(32), primary_key=True)
+    hours = Column(Integer, primary_key=True)
+
+    average_value = Column(Double)
+    

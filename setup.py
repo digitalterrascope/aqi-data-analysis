@@ -2,13 +2,13 @@ from datetime import datetime
 from aqi_pkg.db import get_session
 from aqi_pkg.filters import *
 from aqi_pkg.plots import *
+from aqi_pkg.data_scripts.collate_aqi import *
 
 measurements = ["AQI_IN", "AQI_US", "CO_PPB", "NO2_PPB", "O3_PPB", "SO2_PPB", "PM1_UGM3", "PM2_5_UGM3", "PM10_UGM3", "H_PERCENT", "T_C", "TVOC_PPM", "Noise_DB"]
 
-
 def main(session):
-    data = get_measurements(session, "AQI_IN", city="New Delhi", start=datetime(2025, 12, 1), end=datetime(2025, 12, 5))
-    plot_measurement_frequency_hist(data, bins=100, range=(0,1000), filename="test_img/aqi_in_frequency.png")
+    populate_isduplicate(session)
+
 
 if __name__ == "__main__":
     session = get_session()
