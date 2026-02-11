@@ -104,3 +104,14 @@ def get_measurements_over_time(session, measurement: str, **filters):
     q = session.query(Entry.last_updated, column)
     q = apply_filters(q, **filters)
     return q.all()
+
+
+def get_all_measurements(session, measurements,  **filters):
+    for m in measurements:
+        if not hasattr(Entry, m):
+            raise ValueError(f"Invalid measurement: {m}")
+
+    columns = [getattr(Entry, m) for m in measurements]
+    q = session.query(*columns)
+    q = apply_filters(q, **filters)
+    return q.all()

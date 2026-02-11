@@ -1,5 +1,6 @@
 from aqi_pkg.filters import *
 import matplotlib.pyplot as plt
+import numpy as np
 
 def plot_locations_on_map(locations, filename=None):
     lats = [lat for _, lat, _ in locations]
@@ -26,8 +27,39 @@ def plot_measurement_frequency_hist(measurements, bins, range, filename=None):
     plt.savefig(filename or "test_img/measurement_frequency.png")
 
 
-def plot_measurement_frequency_cdf(measurements, filename=None):
-    pass
+def plot_measurement_frequency_polygon(measurements, bins, range, filename=None, normalize=False):
+    counts, bin_edges, _ = plt.hist(measurements, bins=bins, range=range, alpha=0)
+    bin_midpoints = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+    if normalize:
+        counts = counts / counts.sum()
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(bin_midpoints, counts, alpha=1)
+    plt.xlabel("Measurement Value")
+    plt.ylabel("Frequency")
+    plt.title("Distribution of Measurement Values (Polygon)")
+    
+    plt.savefig(filename or "test_img/measurement_frequency_polygon.png")
+
+
+def plot_multiple_frequency_polygons(measurements, labels, bins, range, filename=None, normalize=False):
+    plt.figure(figsize=(8, 6))
+
+    for m, label in zip(measurements, labels):
+        counts, bin_edges = np.histogram(m, bins=bins, range=range)
+        
+        if normalize:
+            counts = counts / counts.sum()
+
+        bin_midpoints = (bin_edges[:-1] + bin_edges[1:]) / 2
+        plt.plot(bin_midpoints, counts, label=label, )
+
+    plt.xlabel("Measurement Value")
+    plt.ylabel("Probability" if normalize else "Frequency")
+    plt.title("Distribution of Measurement Values (Polygon)")
+    plt.legend()
+    plt.savefig(filename or "test_img/multiple_measurement_frequency_polygons.png")
 
 
 
