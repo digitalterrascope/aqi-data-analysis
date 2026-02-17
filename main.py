@@ -17,13 +17,15 @@ def main(session):
     pollutants = {
         "PM2_5_UGM3": 24,
         "PM10_UGM3": 24,
-        "NO2_UGM3": 1,
-        "OZONE_UGM3": 8,
+        "NO2_PPB": 1,
+        "O3_PPB": 8,
+        "SO2_PPB": 1,
+        "CO_PPB": 1,
     }
 
     t1 = datetime.now()
     print("Loading data...")
-    df = load_data(session)
+    df = load_data(session, pollutants)
     print(f"Data loaded in {datetime.now() - t1}\n")
     
     t = datetime.now()
@@ -31,20 +33,20 @@ def main(session):
     df = remove_duplicates_by_timestamp(df)
     print(f"Duplicates removed in {datetime.now() - t}\n")
 
-    t = datetime.now()
-    print("Calculating subindices...")
-    rolled = compute_rolling(df, "PM2_5_UGM3", 24)
-    print(f"Subindices calculated in {datetime.now() - t}\n")
+    for pollutant, hours in pollutants.items():
+        print(f"\nProcessing {pollutant} ({hours}h window)")
 
-    t = datetime.now()
-    print("Attaching scrape_ids...")
-    final_df = attach_scrape_ids(df, rolled)
-    print(f"Scrape_ids attached in {datetime.now() - t}\n")
+        t = datetime.now()
+        rolled = compute_rolling(df, pollutant, hours)
+        print(f"Rolling average computed in {datetime.now() - t}")
 
-    t = datetime.now()
-    print("Inserting into database...")
-    bulk_insert(session, final_df, "PM2_5_UGM3", 24, MetricAverages)
-    print(f"Inserted into database in {datetime.now() - t}\n")
+        t = datetime.now()
+        final_df = attach_scrape_ids(df, rolled)
+        print(f"Scrape IDs attached in {datetime.now() - t}")
+
+        t = datetime.now()
+        bulk_insert(session, final_df, pollutant, hours, MetricAverages)
+        print(f"Inserted into DB in {datetime.now() - t}")
 
     print("Total execution time:", datetime.now() - t1)
 
