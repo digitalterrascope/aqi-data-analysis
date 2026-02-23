@@ -40,7 +40,10 @@ def load_data(session, pollutants, start='2025-02-09', end='2026-02-15'):
         WHERE last_updated BETWEEN '{start}' AND '{end}'
     """
 
-    return pl.read_database(query, session.bind)
+    return pl.read_database(query=query, connection=session.bind.execution_options(stream_results=True), 
+                            iter_batches=True,
+                            batch_size=100_000
+                            )
 
 
 

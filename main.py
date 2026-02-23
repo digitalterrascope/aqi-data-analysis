@@ -26,29 +26,29 @@ def main(session):
     t1 = datetime.now()
     print("Loading data...")
     df = load_data(session, pollutants)
-    print(f"Data loaded in {datetime.now() - t1}\n")
+    # print(f"Data loaded in {datetime.now() - t1}\n")
     
-    t = datetime.now()
-    print("Removing duplicates...")
-    df = remove_duplicates_by_timestamp(df)
-    print(f"Duplicates removed in {datetime.now() - t}\n")
+    # print("Removing duplicates...")
+    # t = datetime.now()
+    # df = remove_duplicates_by_timestamp(df)
+    # print(f"Duplicates removed in {datetime.now() - t}\n")
 
-    for pollutant, hours in pollutants.items():
-        print(f"\nProcessing {pollutant} ({hours}h window)")
+    # for pollutant, hours in pollutants.items():
+    #     print(f"\nProcessing {pollutant} ({hours}h window)")
 
-        t = datetime.now()
-        rolled = compute_rolling(df, pollutant, hours)
-        print(f"Rolling average computed in {datetime.now() - t}")
+    #     t = datetime.now()
+    #     rolled = compute_rolling(df, pollutant, hours)
+    #     print(f"Rolling average computed in {datetime.now() - t}")
 
-        t = datetime.now()
-        final_df = attach_scrape_ids(df, rolled)
-        print(f"Scrape IDs attached in {datetime.now() - t}")
+    #     t = datetime.now()
+    #     final_df = attach_scrape_ids(df, rolled)
+    #     print(f"Scrape IDs attached in {datetime.now() - t}")
 
-        t = datetime.now()
-        bulk_insert(session, final_df, pollutant, hours, MetricAverages)
-        print(f"Inserted into DB in {datetime.now() - t}")
+    #     t = datetime.now()
+    #     bulk_insert(session, final_df, pollutant, hours, MetricAverages)
+    #     print(f"Inserted into DB in {datetime.now() - t}")
 
-    print("Total execution time:", datetime.now() - t1)
+    # print("Total execution time:", datetime.now() - t1)
 
 
 
