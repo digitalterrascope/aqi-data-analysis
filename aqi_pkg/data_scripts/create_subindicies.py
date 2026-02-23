@@ -10,44 +10,6 @@ pl.Config.set_tbl_rows(100)
 
 
 
-def remove_duplicates_by_timestamp(df: pl.DataFrame) -> pl.DataFrame:
-    """
-    Remove duplicates, keep the entry with latest scrape_id
-    
-    :param df: Polars DF
-    :type df: pl.DataFrame
-    :return: DF with duplicaes removed
-    :rtype: DataFrame
-    """
-    return (
-        df.sort("scrape_id")
-          .unique(subset=["locationId", "last_updated"], keep="last")
-    )
-
-
-
-def load_data(session, pollutants, start='2025-02-09', end='2026-02-15'):
-    if isinstance(pollutants, dict):
-        pollutants = list(pollutants.keys())
-    elif isinstance(pollutants, str):
-        pollutants = [pollutants]
-
-    cols = ", ".join(pollutants)
-
-    query = f"""
-        SELECT scrape_id, city, locationId, last_updated, {cols}
-        FROM AqiInScrape
-        WHERE last_updated BETWEEN '{start}' AND '{end}'
-    """
-
-    return pl.read_database(query=query, connection=session.bind.execution_options(stream_results=True), 
-                            iter_batches=True,
-                            batch_size=100_000
-                            )
-
-
-
-
 def compute_rolling(df, pollutant, hours):
     # Skip if pollutant not in df.columns
     if pollutant not in df.columns:
@@ -84,26 +46,54 @@ def attach_scrape_ids(df, rolled):
     )
 
 
-def bulk_insert(session, df, pollutant, hours, MetricAverages, chunk=50000):
+def bulk_insert(session, df, pollutant, hours, MetricAverages, chunk=100_000):
 
-    data = df.select(["scrape_id", "rolling_avg"]) \
-             .filter(pl.col("rolling_avg").is_not_null()) \
-             .to_dicts()
+    engine = session.get_bind()
 
-    for i in range(0, len(data), chunk):
-        rows = [
-            {
-                "scrape_id": r["scrape_id"],
+    rows_iter = (
+        df.select(["scrape_id", "rolling_avg"])
+          .filter(pl.col("rolling_avg").is_not_null())
+          .iter_rows()
+    )
+
+    batch = []
+
+    with engine.begin() as conn:
+        for scrape_id, avg in rows_iter:
+            batch.append({
+                "scrape_id": scrape_id,
                 "metric_name": pollutant,
                 "hours": hours,
-                "average_value": r["rolling_avg"],
-            }
-            for r in data[i:i+chunk]
-        ]
+                "average_value": avg,
+            })
 
-        stmt = mysql_insert(MetricAverages).values(rows)
-        stmt = stmt.prefix_with("IGNORE")
+            if len(batch) >= chunk:
+                stmt = mysql_insert(MetricAverages).values(batch)
+                stmt = stmt.prefix_with("IGNORE")
+                conn.execute(stmt)
+                batch.clear()
 
-        session.execute(stmt)
+        if batch:
+            stmt = mysql_insert(MetricAverages).values(batch)
+            stmt = stmt.prefix_with("IGNORE")
+            conn.execute(stmt)
 
-    session.commit()
+def export_csv(df, pollutant, hours, path="metric_avg.csv"):
+    out = (
+        df.select(["scrape_id", "rolling_avg"])
+          .filter(pl.col("rolling_avg").is_not_null())
+          .with_columns([
+              pl.lit(pollutant).alias("metric_name"),
+              pl.lit(hours).alias("hours"),
+              pl.col("rolling_avg").alias("average_value"),
+          ])
+          .select([
+              "scrape_id",
+              "metric_name",
+              "hours",
+              "average_value"
+          ])
+    )
+
+    out.write_csv(path)
+    return path

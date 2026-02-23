@@ -18,6 +18,26 @@ class Filter:
     last_updated_range: List[Tuple[datetime]] | Tuple[datetime] = None
     metrics: List[str] | str = None
 
+    def __str__(self):
+        string = ""
+        if self.scrape_id is not None:
+            string += f"scrape_id={self.scrape_id}, "
+        if self.scrape_id_range is not None:
+            string += f"scrape_id_range={self.scrape_id_range}, "
+        if self.locationId is not None:
+            string += f"locationId={self.locationId}, "
+        if self.city is not None:
+            string += f"city={self.city}, "
+        if self.state is not None:
+            string += f"state={self.state}, "
+        if self.country is not None:
+            string += f"country={self.country}, "
+        if self.last_updated_range is not None:
+            string += f"last_updated_range={self.last_updated_range}, "
+        if self.metrics is not None:
+            string += f"metrics={self.metrics}, "
+        return string[:-2] if string else "unfiltered"
+
 
 class DataLoader:
     def __init__(self, filters: Filter):
@@ -92,13 +112,32 @@ class DataLoader:
         return self.query
     
 
-    def get_df(self, cores: int = 9):
+    @staticmethod
+    def remove_duplicates_by_timestamp(df: pl.DataFrame) -> pl.DataFrame:
+        """
+        Remove duplicates, keep the entry with latest scrape_id
+        
+        :param df: Polars DF
+        :type df: pl.DataFrame
+        :return: DF with duplicaes removed
+        :rtype: DataFrame
+        """
+        return (
+            df.sort("scrape_id")
+            .unique(subset=["locationId", "last_updated"], keep="last")
+        )
+
+
+    def get_df(self, cores: int = 9, remove_duplicates: bool = True):
         if self.query is None:
-            raise ValueError("Query not generated. Call get_query() first.")
+            self.get_query()
 
         uri = ENGINE_URL.replace("+pymysql", "")
         uri = uri.replace("localhost", "127.0.0.1")
-        return pl.read_database_uri(query=self.query, uri=uri, engine="connectorx", partition_on="scrape_id", partition_num=cores)
+        df =  pl.read_database_uri(query=self.query, uri=uri, engine="connectorx", partition_on="scrape_id", partition_num=cores)
+        if remove_duplicates:
+            df = self.remove_duplicates_by_timestamp(df)
+        return df
 
 
 if __name__ == "__main__":
