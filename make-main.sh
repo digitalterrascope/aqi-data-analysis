@@ -1,3 +1,13 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+    echo "Usage: $0 <output_file.py>"
+    exit 1
+fi
+
+OUTPUT_FILE="$1"
+
+cat > "$OUTPUT_FILE" << 'EOF'
 from datetime import datetime, timedelta
 from collections import deque, defaultdict, Counter
 import matplotlib.pyplot as plt
@@ -9,12 +19,7 @@ measurements = ["AQI_IN", "AQI_US", "CO_PPB", "NO2_PPB", "O3_PPB", "SO2_PPB", "P
 
 
 def main(session):
-    filter = Filter(
-        city="Delhi",
-        pollutants=measurements,
-        start_date="2025-02-09",
-        end_date="2026-02-15"
-    )
+    filter = Filter()
     
     dataLoader = DataLoader(
         filters=filter    
@@ -36,3 +41,6 @@ if __name__ == "__main__":
         print("Session closed.")
     end_time = datetime.now()
     print(f"Execution time: {end_time - start_time}")
+EOF
+
+echo "Python file generated at $OUTPUT_FILE"

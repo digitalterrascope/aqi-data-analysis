@@ -7,18 +7,10 @@ from aqi_pkg.filters import *
 
 measurements = ["AQI_IN", "AQI_US", "CO_PPB", "NO2_PPB", "O3_PPB", "SO2_PPB", "PM1_UGM3", "PM2_5_UGM3", "PM10_UGM3", "H_PERCENT", "T_C", "TVOC_PPM", "Noise_DB"]
 
-
 def main(session):
-    filter = Filter(
-        city="Delhi",
-        pollutants=measurements,
-        start_date="2025-02-09",
-        end_date="2026-02-15"
-    )
+    filter = Filter()
     
-    dataLoader = DataLoader(
-        filters=filter    
-    )
+    dataLoader = DataLoader(filters=filter)
 
     dataLoader.get_query()
     df = dataLoader.get_df()
