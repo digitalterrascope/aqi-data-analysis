@@ -51,4 +51,10 @@ class MetricAverages(Base):
     hours = Column(Integer, primary_key=True)
 
     average_value = Column(Double)
-    
+
+class UnitConversions(Base):
+    __tablename__ = "UnitConversions"
+
+    scrape_id = Column(Integer, primary_key=True, autoincrement=True)
+    metric_name = Column(String(32), primary_key=True) # Ex. NO2_UGM3
+    value = Column(Double)

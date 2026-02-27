@@ -9,6 +9,17 @@ import polars as pl
 pl.Config.set_tbl_rows(100)
 
 
+def convert_units(df, conversion_map):
+    # Generate a list of expressions only for columns that actually exist in the df
+    expressions = [
+        (pl.col(old_name).cast(pl.Float64) * factor).alias(new_name)
+        for old_name, (new_name, factor) in conversion_map.items()
+        if old_name in df.columns
+    ]
+
+    # Apply all transformations at once
+    return df.with_columns(expressions)
+
 
 def compute_rolling(df, pollutant, hours):
     # Skip if pollutant not in df.columns
@@ -31,7 +42,7 @@ def compute_rolling(df, pollutant, hours):
             closed="both"
         )
         .agg(
-            pl.col(pollutant).mean().alias("rolling_avg")
+            pl.col(pollutant).mean().alias(f"{pollutant}_{hours}h_subindex")
         )
     )
 
@@ -50,9 +61,11 @@ def bulk_insert(session, df, pollutant, hours, MetricAverages, chunk=100_000):
 
     engine = session.get_bind()
 
+    subindex_col_name = f"{pollutant}_{hours}h_subindex"
+
     rows_iter = (
-        df.select(["scrape_id", "rolling_avg"])
-          .filter(pl.col("rolling_avg").is_not_null())
+        df.select(["scrape_id", subindex_col_name])
+          .filter(pl.col(subindex_col_name).is_not_null())
           .iter_rows()
     )
 
@@ -78,14 +91,32 @@ def bulk_insert(session, df, pollutant, hours, MetricAverages, chunk=100_000):
             stmt = stmt.prefix_with("IGNORE")
             conn.execute(stmt)
 
-def export_csv(df, pollutant, hours, path="metric_avg.csv"):
+
+def export_csv_UnitConversions(df, pollutant, path="unit_conversions.csv"):
     out = (
-        df.select(["scrape_id", "rolling_avg"])
-          .filter(pl.col("rolling_avg").is_not_null())
+        df.select(["scrape_id", pollutant])
+          .with_columns([
+              pl.lit(pollutant).alias("metric_name"),
+              pl.col(pollutant).round(2).alias("value"),
+          ])
+          .select([
+              "scrape_id",
+              "metric_name",
+              "value"
+          ])
+    )
+
+    out.write_csv(path)
+    return path
+
+def export_csv_MetricAverages(df, pollutant, hours, path="metric_avg.csv"):
+    subindex_col_name = f"{pollutant}_{hours}h_subindex"
+    out = (
+        df.select(["scrape_id", subindex_col_name])
           .with_columns([
               pl.lit(pollutant).alias("metric_name"),
               pl.lit(hours).alias("hours"),
-              pl.col("rolling_avg").alias("average_value"),
+              pl.col(subindex_col_name).round(2).alias("average_value"),
           ])
           .select([
               "scrape_id",
