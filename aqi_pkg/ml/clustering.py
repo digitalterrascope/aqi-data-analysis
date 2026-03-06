@@ -1,6 +1,7 @@
 from aqi_pkg.filters import Filter, DataLoader
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
+import numpy as np
 import polars as pl
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -35,13 +36,15 @@ def load_data(filter: Filter | str) -> pl.DataFrame:
 
 
 def select_feature_columns(df: pl.DataFrame) -> list[str]:
-    metadata_cols = [
-        "scrape_id", "lat", "lon",
-        "locationId", "city", "state", "country",
-        "last_updated"
-    ]
+    # metadata_cols = [
+    #     "scrape_id", "lat", "lon",
+    #     "locationId", "city", "state", "country",
+    #     "last_updated"
+    # ]
+    # feature_cols = [c for c in df.columns if c not in metadata_cols]
 
-    feature_cols = [c for c in df.columns if c not in metadata_cols]
+    aqi_cols = ['AQI_CO_MGM3', 'AQI_NO2_UGM3', 'AQI_O3_UGM3', 'AQI_PM10_UGM3', 'AQI_PM2_5_UGM3', 'AQI_SO2_UGM3']
+    feature_cols = [c for c in df.columns if c in aqi_cols]
 
     return feature_cols
 
@@ -76,30 +79,49 @@ def scale_features(df: pl.DataFrame, feature_cols: list[str]) -> pl.DataFrame:
     )
 
 
-def compute_inertias(df_scaled: pl.DataFrame,k_range=range(2, 25)):
-    X = df_scaled.to_numpy()
+def compute_inertias(df_scaled: pl.DataFrame, k_range=range(2, 25)):
     inertias = []
 
     for k in k_range:
-        kmeans = KMeans(n_clusters=k, random_state=42)
-        kmeans.fit(X)
+        labels, kmeans, X_whitened = fit_kmeans(df_scaled, k)
         inertias.append(kmeans.inertia_)
 
     return list(k_range), inertias
 
 
 def fit_kmeans(df_scaled: pl.DataFrame, k: int):
+    # X = df_scaled.to_numpy()
+
+    # kmeans = KMeans(n_clusters=k, random_state=42)
+    # labels = kmeans.fit_predict(X)
+
+    # return labels
+
+    # Transform data to mahanobolis distance 
     X = df_scaled.to_numpy()
-
+    # center data
+    mean = X.mean(axis=0)
+    X_centered = X - mean
+    # covariance matrix
+    cov = np.cov(X_centered, rowvar=False)
+    # Cholesky decomposition
+    L = np.linalg.cholesky(cov)
+    # whiten transform
+    X_whitened = np.linalg.solve(L, X_centered.T).T
+    # run KMeans
     kmeans = KMeans(n_clusters=k, random_state=42)
-    labels = kmeans.fit_predict(X)
+    labels = kmeans.fit_predict(X_whitened)
 
-    return labels
+    return labels, kmeans, X_whitened
 
 
 def cluster_filter(filter: Filter | str, k: int | None = None, null_threshold: float = 0.5):
 
     df = load_data(filter)
+
+    from aqi_pkg.data_scripts.create_subindicies import convert_units_and_calculate_subindicies, calculate_aqi_metrics
+    df = convert_units_and_calculate_subindicies(df)
+    df = calculate_aqi_metrics(df)
 
     feature_cols = select_feature_columns(df)
 
@@ -116,7 +138,7 @@ def cluster_filter(filter: Filter | str, k: int | None = None, null_threshold: f
     if k is None:
         return K, inertias
 
-    labels = fit_kmeans(df_scaled, k)
+    labels, _, _ = fit_kmeans(df_scaled, k)
 
     df_clustered = df_clean.with_columns(
         pl.Series("cluster", labels)

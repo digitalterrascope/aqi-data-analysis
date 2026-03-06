@@ -9,11 +9,14 @@ from aqi_pkg.ml.clustering import *
 measurements = ["AQI_IN", "AQI_US", "CO_PPB", "NO2_PPB", "O3_PPB", "SO2_PPB", "PM1_UGM3", "PM2_5_UGM3", "PM10_UGM3", "H_PERCENT", "T_C", "TVOC_PPM", "Noise_DB"]
 
 def main(session):
-    # filter = Filter(locationId="VIR4219")
-    # K, inertias = cluster_filter(filter)
-    # plot_elbow(K, inertias, fname=filter.__str__())
+    location = "Sector 22"
+    locationId = "13741"
 
-    plot_clusters("VIR4219", k=7)
+    filter = Filter(locationId=locationId)
+    K, inertias = cluster_filter(filter)
+    plot_elbow(K, inertias, fname=filter.__str__())
+
+    # plot_clusters(locationId, k=7)
 
 
 if __name__ == "__main__":
