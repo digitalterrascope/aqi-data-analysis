@@ -49,7 +49,7 @@ def compute_rolling(df, pollutant, hours):
             closed="both"
         )
         .agg(
-            pl.col(pollutant).mean().alias(f"{pollutant}_{hours}h_Subindex")
+            pl.col(pollutant).mean().alias(f"{pollutant}_{hours}h_subindex")
         )
     )
 
