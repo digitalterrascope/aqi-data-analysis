@@ -7,3 +7,6 @@ test_img/
 *.html
 *.png
 *.csv
+*.xlsx
+*.egg-info
+*.toml

@@ -13,7 +13,8 @@ CPCB_NODES_COORDS = {
     "Sector 22": (30.7356, 76.7757),
     "Sector 53": (30.7199, 76.7386),
     "Sector 25": (30.7515, 76.7629),
-    "Sector 6 Panchkula": (30.7058, 76.8532)
+    "Sector 6 Panchkula": (30.7058, 76.8532),
+    
 }
 
 # Use the following map with the aqi_pkg.data_scripts.create_subindicies.convert_units function
