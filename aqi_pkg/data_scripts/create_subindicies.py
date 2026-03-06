@@ -10,14 +10,21 @@ pl.Config.set_tbl_rows(100)
 
 
 def convert_units(df, conversion_map):
-    # Generate a list of expressions only for columns that actually exist in the df
-    expressions = [
-        (pl.col(old_name).cast(pl.Float64) * factor).alias(new_name)
-        for old_name, (new_name, factor) in conversion_map.items()
-        if old_name in df.columns
-    ]
+    expressions = []
 
-    # Apply all transformations at once
+    for old_name, conversions in conversion_map.items():
+        if old_name not in df.columns:
+            continue
+
+        # Ensure conversions is a list
+        if isinstance(conversions, tuple):
+            conversions = [conversions]
+
+        for new_name, factor in conversions:
+            expressions.append(
+                (pl.col(old_name).cast(pl.Float64) * factor).alias(new_name)
+            )
+
     return df.with_columns(expressions)
 
 
@@ -42,7 +49,7 @@ def compute_rolling(df, pollutant, hours):
             closed="both"
         )
         .agg(
-            pl.col(pollutant).mean().alias(f"{pollutant}_{hours}h_subindex")
+            pl.col(pollutant).mean().alias(f"{pollutant}_{hours}h_Subindex")
         )
     )
 

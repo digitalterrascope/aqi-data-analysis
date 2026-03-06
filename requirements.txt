@@ -35,3 +35,4 @@ tqdm==4.67.3
 typing_extensions==4.15.0
 urllib3==2.6.3
 xyzservices==2025.11.0
+seaborn
