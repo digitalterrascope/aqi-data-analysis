@@ -1,10 +1,11 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, time
 from typing import List, Tuple
 from aqi_pkg.db import ENGINE_URL
 from aqi_pkg.tables import Entry
 from sqlalchemy import select, and_, or_
 from sqlalchemy.dialects import mysql
+from sqlalchemy import func
 import polars as pl
 
 @dataclass
@@ -16,6 +17,7 @@ class Filter:
     state: List[str] | str = None
     country: List[str] | str = None
     last_updated_range: List[Tuple[datetime]] | Tuple[datetime] = None
+    time_between: List[Tuple[datetime]] | Tuple[datetime] = None
     metrics: List[str] | str = None
 
     def __str__(self):
@@ -34,6 +36,8 @@ class Filter:
             string += f"country={self.country}, "
         if self.last_updated_range is not None:
             string += f"last_updated_range={self.last_updated_range}, "
+        if self.time_between is not None:
+            string += f"time_between={self.time_between}, "
         if self.metrics is not None:
             string += f"metrics={self.metrics}, "
         return string[:-2] if string else "unfiltered"
@@ -97,6 +101,19 @@ class DataLoader:
 
             conditions.append(or_(*last_updated_conditions))
 
+        # time_between (time of day filter)
+        if f.time_between is not None:
+            ranges = f.time_between
+            if not isinstance(ranges, list):
+                ranges = [ranges]
+
+            time_conditions = [
+                func.time(Entry.last_updated).between(start, end)
+                for start, end in ranges
+            ]
+
+            conditions.append(or_(*time_conditions))
+
         stmt = select(Entry)
 
         if conditions:
@@ -148,11 +165,17 @@ if __name__ == "__main__":
         filter = Filter(
             city="Chandigarh",
             last_updated_range=[(datetime(2025, 2, 9), datetime(2026, 2, 15))],
+            time_between=(time(10, 0), time(14, 0))
         )
         
         dataLoader = DataLoader(
-            filter=filter    
+            filters=filter
         )
+
+        df = dataLoader.get_df()
+
+        print(df.select("last_updated").describe())
+
     finally:
         session.close()
         print("Session closed.")
