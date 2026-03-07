@@ -1,5 +1,6 @@
 from aqi_pkg.filters import Filter, DataLoader
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
 import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
@@ -65,6 +66,10 @@ def remove_high_null_columns(df: pl.DataFrame, feature_cols: list[str], threshol
 
 
 def filter_valid_rows(df: pl.DataFrame, feature_cols: list[str]) -> pl.DataFrame:
+    if not feature_cols:
+        print("No feature cols, returning df")
+        return df
+    
     mask = pl.all_horizontal(
         [pl.col(c).is_not_null() for c in feature_cols]
     )
@@ -115,10 +120,46 @@ def fit_kmeans(df_scaled: pl.DataFrame, k: int):
     return labels, kmeans, X_whitened
 
 
+def compute_cluster_metrics(df_scaled: pl.DataFrame, k_range=range(2, 15)):
+    X = df_scaled.to_numpy()
+
+    metrics = {
+        "k": [],
+        "inertia": [],
+        "silhouette": [],
+        "calinski_harabasz": [],
+        "davies_bouldin": []
+    }
+
+    for k in k_range:
+        labels, kmeans, Xw = fit_kmeans(df_scaled, k)
+
+        metrics["k"].append(k)
+        metrics["inertia"].append(kmeans.inertia_)
+
+        if len(set(labels)) > 1:
+            metrics["silhouette"].append(
+                silhouette_score(Xw, labels)
+            )
+            metrics["calinski_harabasz"].append(
+                calinski_harabasz_score(Xw, labels)
+            )
+            metrics["davies_bouldin"].append(
+                davies_bouldin_score(Xw, labels)
+            )
+        else:
+            metrics["silhouette"].append(np.nan)
+            metrics["calinski_harabasz"].append(np.nan)
+            metrics["davies_bouldin"].append(np.nan)
+
+    return metrics
+
+
 def cluster_filter(filter: Filter | str, k: int | None = None, null_threshold: float = 0.5):
 
     df = load_data(filter)
 
+    # Calculate subindices and metrics
     from aqi_pkg.data_scripts.create_subindicies import convert_units_and_calculate_subindicies, calculate_aqi_metrics
     df = convert_units_and_calculate_subindicies(df)
     df = calculate_aqi_metrics(df)
@@ -131,12 +172,14 @@ def cluster_filter(filter: Filter | str, k: int | None = None, null_threshold: f
 
     df_clean = filter_valid_rows(df, feature_cols)
 
+    # Nomralize features
     df_scaled = scale_features(df_clean, feature_cols)
 
-    K, inertias = compute_inertias(df_scaled)
+    metrics = compute_cluster_metrics(df_scaled)
 
     if k is None:
-        return K, inertias
+        return metrics, plot_k_metrics(metrics)
+
 
     labels, _, _ = fit_kmeans(df_scaled, k)
 
@@ -144,7 +187,32 @@ def cluster_filter(filter: Filter | str, k: int | None = None, null_threshold: f
         pl.Series("cluster", labels)
     )
 
-    return df_clustered, K, inertias
+    return df_clustered
+
+
+def plot_k_metrics(metrics):
+    k = metrics["k"]
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+
+    axes[0,0].plot(k, metrics["inertia"], marker="o")
+    axes[0,0].set_title("Elbow (Inertia)")
+
+    axes[0,1].plot(k, metrics["silhouette"], marker="o")
+    axes[0,1].set_title("Silhouette Score")
+
+    axes[1,0].plot(k, metrics["calinski_harabasz"], marker="o")
+    axes[1,0].set_title("Calinski-Harabasz")
+
+    axes[1,1].plot(k, metrics["davies_bouldin"], marker="o")
+    axes[1,1].set_title("Davies-Bouldin")
+
+    for ax in axes.flatten():
+        ax.set_xlabel("k")
+        ax.grid(True)
+
+    fig.tight_layout()
+    return fig
 
 
 def plot_clusters(filter: Filter | str, k: int):
