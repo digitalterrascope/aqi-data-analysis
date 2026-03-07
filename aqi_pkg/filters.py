@@ -13,6 +13,8 @@ class Filter:
     scrape_id: List[int] | int = None
     scrape_id_range: List[Tuple[int]] | Tuple[int] = None
     locationId: List[str] | str = None
+    lat: List[float] | float = None
+    lon: List[float] | float = None
     city: List[str] | str = None
     state: List[str] | str = None
     country: List[str] | str = None
@@ -28,6 +30,10 @@ class Filter:
             string += f"scrape_id_range={self.scrape_id_range}, "
         if self.locationId is not None:
             string += f"locationId={self.locationId}, "
+        if self.lat is not None:
+            string += f"lat={self.lat}, "
+        if self.lon is not None:
+            string += f"lon={self.lon}, "
         if self.city is not None:
             string += f"city={self.city}, "
         if self.state is not None:
@@ -80,6 +86,8 @@ class DataLoader:
         if f.locationId is not None:
             conditions.append(handle_string_field(Entry.locationId, f.locationId))
 
+        
+
         if f.city is not None:
             conditions.append(handle_string_field(Entry.city, f.city))
 
@@ -88,6 +96,20 @@ class DataLoader:
 
         if f.country is not None:
             conditions.append(handle_string_field(Entry.country, f.country))
+
+        # lat filter
+        if f.lat is not None:
+            if isinstance(f.lat, list):
+                conditions.append(Entry.lat.in_(f.lat))
+            else:
+                conditions.append(Entry.lat == f.lat)
+
+        # lon filter
+        if f.lon is not None:
+            if isinstance(f.lon, list):
+                conditions.append(Entry.lon.in_(f.lon))
+            else:
+                conditions.append(Entry.lon == f.lon)
 
         # last_updated range
         last_updated_conditions = []
@@ -151,8 +173,33 @@ class DataLoader:
             .unique(subset=["locationId", "last_updated"], keep="last")
         )
 
+    @staticmethod
+    def hourly_aggregates(df: pl.DataFrame) -> pl.DataFrame:
+        """
+        Groupby locationId and average out coloumns by per hour basis, so there's only one entry per hour
+        """
 
-    def get_df(self, cores: int = 9, remove_duplicates: bool = True):
+        df = df.sort("last_updated")
+
+        numeric_cols = [
+            c for c, dtype in zip(df.columns, df.dtypes)
+            if dtype.is_numeric() and c != "scrape_id"
+        ]
+
+        agg_exprs = [pl.col(c).mean().alias(c) for c in numeric_cols]
+
+        return (
+            df.group_by_dynamic(
+                index_column="last_updated",
+                every="1h",
+                by="locationId",
+                closed="left",
+            )
+            .agg(agg_exprs)
+            .sort(["locationId", "last_updated"])
+        )
+
+    def get_df(self, cores: int = 9, remove_duplicates: bool = True, hourly_data_only: bool = False):
         if self.query is None:
             self.get_query()
 
@@ -161,6 +208,8 @@ class DataLoader:
         df =  pl.read_database_uri(query=self.query, uri=uri, engine="connectorx", partition_on="scrape_id", partition_num=cores)
         if remove_duplicates:
             df = self.remove_duplicates_by_timestamp(df)
+        if hourly_data_only:
+            df = self.hourly_aggregates(df)
         return df
 
 

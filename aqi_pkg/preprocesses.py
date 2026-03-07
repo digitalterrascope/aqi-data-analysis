@@ -1,5 +1,7 @@
 import polars as pl
 import aqi_pkg as ap
+from typing import Tuple, List
+
 
 def add_georef_location(df: pl.DataFrame, georefs_filepath: str = "tricity_georefs.xlsx") -> pl.DataFrame:
     # CPCB Locations
@@ -48,3 +50,64 @@ def add_georef_location(df: pl.DataFrame, georefs_filepath: str = "tricity_geore
     ).drop(["location_cpcb", "location_georef"])
 
     return df
+
+
+def filter_by_location(df: pl.DataFrame, location_name:str) -> pl.DataFrame:
+    interest_coords = (
+        df
+        .filter(pl.col("location").str.to_lowercase() == location_name.lower())
+        .select(["lat", "lon"])
+        .unique()
+        .rows()[0]
+    )
+    
+    interest_locationid = df.filter(
+        (pl.col("lat") == interest_coords[0]) &
+        (pl.col("lon") == interest_coords[1])
+    ).select("locationId").unique().item()
+    
+    return df.filter(pl.col("locationId") == interest_locationid)
+
+
+def locationId_from_coord(coords: List[Tuple[float, float]] | Tuple[float, float]) \
+    -> dict[Tuple[float, float], str]:
+
+    if isinstance(coords, tuple):
+        coords = [coords]
+
+    lats = [c[0] for c in coords]
+    lons = [c[1] for c in coords]
+
+    filter = ap.filters.Filter(lat=lats, lon=lons)
+    dataLoader = ap.filters.DataLoader(filter)
+    df = dataLoader.get_df()
+
+    df = df.select(["locationId", "lat", "lon"]).unique()
+
+    return {
+        (row["lat"], row["lon"]): row["locationId"]
+        for row in df.to_dicts()
+    }
+
+
+def all_georef_location_to_csv(
+    output_path: str = "georef_locations.csv",
+    georefs_filepath: str = "tricity_georefs.xlsx"
+) -> None:
+    filter = ap.filters.Filter()
+    dataLoader = ap.filters.DataLoader(filter)
+    df = dataLoader.get_df()
+
+    df = add_georef_location(df, georefs_filepath)
+    (
+        df
+        .select(["locationId", "location"])
+        .unique(subset=["locationId"], keep="last")
+        .write_csv(output_path)
+    )
+
+
+def get_location(locationId: str) -> str:
+    df = pl.read_csv("georef_locations.csv")
+    location = df.filter(pl.col("locationId") == locationId).select("location").item()
+    return location
