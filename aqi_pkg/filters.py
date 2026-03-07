@@ -107,10 +107,17 @@ class DataLoader:
             if not isinstance(ranges, list):
                 ranges = [ranges]
 
-            time_conditions = [
-                func.time(Entry.last_updated).between(start, end)
-                for start, end in ranges
-            ]
+            time_conditions = []
+
+            for start, end in ranges:
+                t = func.time(Entry.last_updated)
+
+                if start <= end:
+                    # normal case (same day)
+                    time_conditions.append(t.between(start, end))
+                else:
+                    # crosses midnight
+                    time_conditions.append(or_(t >= start, t <= end))
 
             conditions.append(or_(*time_conditions))
 
@@ -165,7 +172,7 @@ if __name__ == "__main__":
         filter = Filter(
             city="Chandigarh",
             last_updated_range=[(datetime(2025, 2, 9), datetime(2026, 2, 15))],
-            time_between=(time(10, 0), time(14, 0))
+            time_between=(time(22, 0), time(4, 0))
         )
         
         dataLoader = DataLoader(
