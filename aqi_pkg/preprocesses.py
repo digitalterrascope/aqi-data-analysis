@@ -94,7 +94,7 @@ def all_georef_location_to_csv(
     output_path: str = "georef_locations.csv",
     georefs_filepath: str = "tricity_georefs.xlsx"
 ) -> None:
-    filter = ap.filters.Filter()
+    filter = ap.filters.Filter(city=ap.tags.TRICITY_CITIES_LIST)
     dataLoader = ap.filters.DataLoader(filter)
     df = dataLoader.get_df()
 
@@ -107,7 +107,7 @@ def all_georef_location_to_csv(
     )
 
 
-def get_location(locationId: str) -> str:
-    df = pl.read_csv("georef_locations.csv")
+def get_location_from_locationId(locationId: str) -> str:
+    df = pl.read_csv("/home/studentiotlab/aqi-data-analysis/georef_locations.csv")
     location = df.filter(pl.col("locationId") == locationId).select("location").item()
     return location
