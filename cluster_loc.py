@@ -10,21 +10,26 @@ from aqi_pkg.ml.clustering import *
 
 measurements = ["AQI_IN", "AQI_US", "CO_PPB", "NO2_PPB", "O3_PPB", "SO2_PPB", "PM1_UGM3", "PM2_5_UGM3", "PM10_UGM3", "H_PERCENT", "T_C", "TVOC_PPM", "Noise_DB"]
 
+def my_hash_function(string: str) -> int:
+    sum = 0
+    for char in string:
+        sum += ord(char)
+    return abs(sum) % 2**32  # np needs 32 bit unsigned integer
+
 def main(session):
-    location = "Sector 22"
-    locationId = "13741"
+    CPCB_NODES_COORDS = ap.tags.CPCB_NODES_COORDS
+    COORDS_LOCID = ap.preprocesses.locationId_from_coord(CPCB_NODES_COORDS.values())
 
-    DIURNAL_TIME_MAP = ap.tags.DIURNAL_TIME_MAP
-
-    for timename, time in DIURNAL_TIME_MAP.items():
-        filter = Filter(
-            locationId=locationId,
-            time_between=time
-            )
+    for location_name, coords in CPCB_NODES_COORDS.items():
+        locationId = COORDS_LOCID[coords]
+        filter = Filter(locationId=locationId)
         metrics, metrics_fig = cluster_filter(filter)
-        metrics_fig.savefig(f"{location} {timename} Cluster Metrics")
+        metrics_fig.suptitle(f"{location_name} KMeans Cluster Metrics")
+        # metrics_fig.savefig(f"{location_name} Cluster Metrics")
 
-        plot_clusters(filter, k=7)
+        np.random.seed(my_hash_function(location_name))
+        k = np.random.randint(3, 7)
+        plot_clusters(filter, k=k, location=location_name, display_now=True)
 
 
 if __name__ == "__main__":

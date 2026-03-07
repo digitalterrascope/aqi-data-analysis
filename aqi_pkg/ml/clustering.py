@@ -1,3 +1,4 @@
+import aqi_pkg as ap
 from aqi_pkg.filters import Filter, DataLoader
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
@@ -26,7 +27,7 @@ def load_data(filter: Filter | str) -> pl.DataFrame:
         filter = Filter(locationId=filter)
 
     loader = DataLoader(filter)
-    df = loader.get_df(remove_duplicates=True)
+    df = loader.get_df(remove_duplicates=True, hourly_data_only=True)
 
     if "last_updated" in df.columns:
         df = df.with_columns(
@@ -193,7 +194,7 @@ def cluster_filter(filter: Filter | str, k: int | None = None, null_threshold: f
 def plot_k_metrics(metrics):
     k = metrics["k"]
 
-    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8), layout="constrained")
 
     axes[0,0].plot(k, metrics["inertia"], marker="o")
     axes[0,0].set_title("Elbow (Inertia)")
@@ -211,25 +212,59 @@ def plot_k_metrics(metrics):
         ax.set_xlabel("k")
         ax.grid(True)
 
-    fig.tight_layout()
     return fig
 
 
-def plot_clusters(filter: Filter | str, k: int):
+def plot_clusters(filter: Filter | str, k: int, location: str | None = None, display_now: bool = False):
+    
+    from aqi_pkg.aqi_standards.in_cbcp import BREAKPOINTS as CPCB_BREAKPOINTS
 
-    df_clustered, _, _ = cluster_filter(filter, k=k)
+    CPCB_COLORS = [
+        "#00e400",  # Good
+        "#92d050",  # Satisfactory
+        "#ffff00",  # Moderate
+        "#ff7e00",  # Poor
+        "#ff0000",  # Very Poor
+        "#7e0023",  # Severe
+    ]
 
-    # --- Determine metric columns (match clustering logic) ---
+    # Strip "AQI_" prefix to match BREAKPOINTS keys e.g. AQI_CO_MGM3 -> CO_MGM3
+    def _cpcb_color(col: str, value) -> str:
+        if value is None or (isinstance(value, float) and value != value):
+            return "#ffffff"
+        key = col.removeprefix("AQI_")
+        breakpoints = CPCB_BREAKPOINTS.get(key)
+        if breakpoints is None:
+            return "#ffffff"
+        
+        def hex_to_rgb(h):
+            h = h.lstrip("#")
+            return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+        
+        def rgb_to_hex(r, g, b):
+            return "#{:02x}{:02x}{:02x}".format(int(r), int(g), int(b))
+        
+        def lerp(a, b, t):
+            return a + (b - a) * t
+        
+        for i, (lo, hi) in enumerate(breakpoints):
+            if lo <= value <= hi:
+                t = (value - lo) / (hi - lo) if hi != lo else 0
+                c1 = hex_to_rgb(CPCB_COLORS[i])
+                c2 = hex_to_rgb(CPCB_COLORS[min(i + 1, len(CPCB_COLORS) - 1)])
+                return rgb_to_hex(lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), lerp(c1[2], c2[2], t))
+        
+        return CPCB_COLORS[-1]
+
+    df_clustered = cluster_filter(filter, k=k)
+
     metadata_cols = [
         "scrape_id", "lat", "lon",
         "locationId", "city", "state",
         "country", "last_updated", "cluster"
     ]
-
-    metric_cols = [
-        c for c in df_clustered.columns
-        if c not in metadata_cols
-    ]
+    aqi_cols = ['AQI_CO_MGM3', 'AQI_NO2_UGM3', 'AQI_O3_UGM3', 'AQI_PM10_UGM3', 'AQI_PM2_5_UGM3', 'AQI_SO2_UGM3']
+    metric_cols = [c for c in df_clustered.columns if c in aqi_cols]
 
     # ---------------- PIE ----------------
     cluster_counts = (
@@ -243,56 +278,44 @@ def plot_clusters(filter: Filter | str, k: int):
     cluster_means = (
         df_clustered
         .group_by("cluster")
-        .agg([
-            pl.col(c).mean().alias(c) for c in metric_cols
-        ])
+        .agg([pl.col(c).mean().alias(c) for c in metric_cols])
         .sort("cluster")
     )
-
     cluster_means = cluster_means.select(
         [c for c in cluster_means.columns if cluster_means[c].is_not_null().any()]
     )
-    
     metric_cols = [c for c in metric_cols if c in cluster_means.columns]
 
-    # Convert to pandas-like structure for Plotly table
     table_header = ["cluster"] + metric_cols
-    table_values = [
-        cluster_means["cluster"].to_list()
-    ] + [
-        cluster_means[c].round(3).to_list()
-        for c in metric_cols
-    ]
+    table_values = (
+        [cluster_means["cluster"].to_list()]
+        + [cluster_means[c].round(3).to_list() for c in metric_cols]
+    )
+
+    # Per-cell fill colors: one list per column
+    table_fill_colors = [["#d0d0d0"] * len(cluster_means)]  # cluster id column
+    for c in metric_cols:
+        table_fill_colors.append([
+            _cpcb_color(c, v) for v in cluster_means[c].to_list()
+        ])
 
     # ---------------- WEEKLY PERCENTAGES ----------------
     weekly = (
         df_clustered
-        .with_columns(
-            pl.col("last_updated").dt.truncate("1w").alias("week")
-        )
+        .with_columns(pl.col("last_updated").dt.truncate("1w").alias("week"))
         .group_by(["week", "cluster"])
         .agg(pl.len().alias("count"))
     )
-
-    # Build complete grid (all weeks × all clusters)
     all_weeks = weekly.select("week").unique()
     all_clusters = df_clustered.select("cluster").unique()
-
-    full_grid = (
-        all_weeks.join(all_clusters, how="cross")
-    )
-
     weekly = (
-        full_grid
+        all_weeks.join(all_clusters, how="cross")
         .join(weekly, on=["week", "cluster"], how="left")
         .with_columns(pl.col("count").fill_null(0))
         .sort(["week", "cluster"])
-    )
-
-    weekly = weekly.with_columns(
-        (pl.col("count") /
-        pl.sum("count").over("week") * 100
-        ).alias("percentage")
+        .with_columns(
+            (pl.col("count") / pl.sum("count").over("week") * 100).alias("percentage")
+        )
     )
 
     # ---------------- BUILD FIGURE ----------------
@@ -307,7 +330,6 @@ def plot_clusters(filter: Filter | str, k: int):
         ]
     )
 
-    # Pie
     fig.add_trace(
         go.Pie(
             labels=cluster_counts["cluster"].to_list(),
@@ -315,32 +337,36 @@ def plot_clusters(filter: Filter | str, k: int):
             hole=0.5,
             showlegend=False
         ),
-        row=1,
-        col=1
+        row=1, col=1
     )
 
-    # Means table
     fig.add_trace(
         go.Table(
-            header=dict(values=table_header),
-            cells=dict(values=table_values)
+            header=dict(
+                values=table_header,
+                fill_color="#404040",
+                font=dict(color="white", size=12),
+                align="center",
+            ),
+            cells=dict(
+                values=table_values,
+                fill_color=table_fill_colors,
+                font=dict(color="black", size=11),
+                align="center",
+            )
         ),
-        row=2,
-        col=1
+        row=2, col=1
     )
 
-    # Weekly stacked percentage bars
     for cluster in sorted(df_clustered["cluster"].unique().to_list()):
         subset = weekly.filter(pl.col("cluster") == cluster)
-
         fig.add_trace(
             go.Bar(
                 x=subset["week"].to_list(),
                 y=subset["percentage"].to_list(),
                 name=f"Cluster {cluster}"
             ),
-            row=1,
-            col=2
+            row=1, col=2
         )
 
     fig.update_layout(
@@ -348,11 +374,12 @@ def plot_clusters(filter: Filter | str, k: int):
         template="plotly_white",
         height=900,
         width=1600,
-        title=f"Cluster Overview (k={k})"
+        title=f"{location} Cluster Overview (k={k})"
     )
-
     fig.update_yaxes(title_text="Percentage (%)", row=1, col=2)
-
-    fig.show()
-
-    return df_clustered
+    if display_now:
+        fig.show()
+        return df_clustered, fig
+    else:
+        fig_html = fig.to_html(full_html=False, include_plotlyjs="True")
+        return df_clustered, fig_html
