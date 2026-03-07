@@ -148,8 +148,7 @@ def calculate_aqi_metrics(df: pl.DataFrame, rho: float = 2.2) -> pl.DataFrame:
     # Aggregate AQI_CPCB, AQI_SAFAR
     aqi_cols = [c for c in df.columns if "AQI_" in c and "IN" not in c and "US" not in c]
     aqi_cols.sort()
-    print(aqi_cols)
-
+ 
     cpcb_cols = [
         c for c in aqi_cols
         if any(k in c for k in ["NO2_UGM3", "O3_UGM3", "SO2_UGM3", "CO_MGM3", "PM2_5", "PM10"])

@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
+import datetime as dt
 from collections import deque, defaultdict, Counter
 import matplotlib.pyplot as plt
 
+import aqi_pkg as ap
 from aqi_pkg.db import get_session
 from aqi_pkg.filters import *
 from aqi_pkg.ml.clustering import *
@@ -12,11 +14,17 @@ def main(session):
     location = "Sector 22"
     locationId = "13741"
 
-    filter = Filter(locationId=locationId)
-    K, inertias = cluster_filter(filter)
-    plot_elbow(K, inertias, fname=filter.__str__())
+    DIURNAL_TIME_MAP = ap.tags.DIURNAL_TIME_MAP
 
-    # plot_clusters(locationId, k=7)
+    for timename, time in DIURNAL_TIME_MAP.items():
+        filter = Filter(
+            locationId=locationId,
+            time_between=time
+            )
+        metrics, metrics_fig = cluster_filter(filter)
+        metrics_fig.savefig(f"{location} {timename} Cluster Metrics")
+
+        plot_clusters(filter, k=7)
 
 
 if __name__ == "__main__":
