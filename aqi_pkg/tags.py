@@ -4,6 +4,7 @@ Module for managing AQI data analysis tags and constants.
 This module serves as a centralized location for frequently used shortcut variables
 and constants.
 """
+import datetime as dt
 
 # List of cities for all nodes in tricity
 TRICITY_CITIES_LIST = ['Chandigarh', 'Mohali', 'Zirakpur', 'Panchkula', 'Sahibzada Ajit Singh Nagar']
@@ -24,3 +25,12 @@ UNIT_CONVERSION_MAP = {
     "SO2_PPB": ("SO2_UGM3", 2.62),
     "CO_PPB": [("CO_MGM3", 1.15 / 1000), ("CO_PPM", 1/1000)],
 }
+
+# Diurnal Calculations
+DIURNAL_TIME_MAP = {
+        "dawn"      : (dt.time(4, 0),  dt.time(6, 59))  ,
+        "forenoon"  : (dt.time(7, 0),  dt.time(11, 59)) ,
+        "afternoon" : (dt.time(12, 0), dt.time(15, 59)) ,
+        "evening"   : (dt.time(16, 0), dt.time(19, 59)) ,
+        "night"     : (dt.time(20, 0), dt.time(3, 59))  
+    }
