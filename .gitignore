@@ -10,3 +10,4 @@ test_img/
 *.xlsx
 *.egg-info
 *.toml
+*.json
