@@ -22,10 +22,10 @@ def main(session):
 
     for location_name, coords in CPCB_NODES_COORDS.items():
         locationId = COORDS_LOCID[coords]
-        filter = Filter(locationId=locationId)
+        filter = Filter(locationId=locationId, last_updated_range=(datetime(2026, 2, 1), datetime(2026, 2, 28)))
         metrics, metrics_fig = cluster_filter(filter)
         metrics_fig.suptitle(f"{location_name} KMeans Cluster Metrics")
-        # metrics_fig.savefig(f"{location_name} Cluster Metrics")
+        metrics_fig.savefig(f"{location_name} Cluster Metrics")
 
         np.random.seed(my_hash_function(location_name))
         k = np.random.randint(3, 7)
