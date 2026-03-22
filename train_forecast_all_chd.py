@@ -2,6 +2,12 @@
 True Forecasting Model: Predict PM2.5 H hours into the future
 Using ONLY data available at prediction time.
 Runs for all Chandigarh nodes and creates comparison table.
+USING OPTIMAL HYPERPARAMETERS FROM OPTIMIZATION:
+- n_estimators: 200
+- max_depth: 15
+- min_samples_split: 8
+- min_samples_leaf: 2
+- max_features: 0.5
 """
 
 import polars as pl
@@ -227,15 +233,21 @@ def process_location_forecast(location_id):
         print(f"Test size: {len(X_test)}")
 
         # ==============================
-        # 7. TRAIN MODEL
+        # 7. TRAIN MODEL WITH OPTIMAL HYPERPARAMETERS
         # ==============================
-        print("Training Random Forest...")
+        print("Training Random Forest with optimal parameters...")
+        print("   n_estimators: 200")
+        print("   max_depth: 15")
+        print("   min_samples_split: 8")
+        print("   min_samples_leaf: 2")
+        print("   max_features: 0.5")
 
         model = RandomForestRegressor(
             n_estimators=200,
-            max_depth=10,
-            min_samples_split=10,
-            min_samples_leaf=5,
+            max_depth=15,
+            min_samples_split=8,
+            min_samples_leaf=2,
+            max_features=0.5,
             n_jobs=-1,
             random_state=42
         )
@@ -277,7 +289,14 @@ def process_location_forecast(location_id):
             "r2_score": float(r2),
             "features": feature_cols,
             "top_3_features": top_3_features,
-            "top_3_importance": top_3_importance
+            "top_3_importance": top_3_importance,
+            "hyperparameters": {
+                "n_estimators": 200,
+                "max_depth": 15,
+                "min_samples_split": 8,
+                "min_samples_leaf": 2,
+                "max_features": 0.5
+            }
         }
 
         metadata_path = os.path.join(MODELS_DIR, f"{location_id}_forecast_metadata.json")
@@ -315,6 +334,7 @@ print("="*80)
 print("PM2.5 FORECASTING MODEL - ALL CHANDIGARH NODES")
 print("="*80)
 print(f"Forecast Horizon: {FORECAST_HORIZON_HOURS} hour(s) ahead")
+print(f"OPTIMAL HYPERPARAMETERS: n_estimators=200, max_depth=15, min_samples_split=8, min_samples_leaf=2, max_features=0.5")
 print(f"Total locations to process: {len(LOCATION_IDS)}")
 print(f"Models will be saved to: {MODELS_DIR}/")
 print("="*80)
